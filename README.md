@@ -86,6 +86,7 @@ so reading stops at the total size.
 
 - VARBYTES ending in zero bytes lose them: DBISAM stores no length, neither in the row nor in the `.idx`.
 - Only checked against DBISAM 4.52.
+- Text is always read as Windows-1252; other locales are untested.
 
 ## Tests
 
