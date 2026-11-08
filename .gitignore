@@ -1,0 +1,15 @@
+target/
+
+# Real databases and backups never belong in this repo; tests generate their own tables.
+/testdata*/
+*.7z
+*.zip
+*.dat
+*.blb
+*.idx
+*.dbk
+*.ibk
+*.bbk
+*.lck
+*.env
+.env*
