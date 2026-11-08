@@ -84,8 +84,8 @@ so reading stops at the total size.
 
 ## Known gaps
 
-- VARBYTES ending in zero bytes lose them: no stored length was found.
-- Only checked against DBISAM 4.52; BCD only with scale 2.
+- VARBYTES ending in zero bytes lose them: a row holds the bytes but no length.
+- Only checked against DBISAM 4.52.
 
 ## Tests
 

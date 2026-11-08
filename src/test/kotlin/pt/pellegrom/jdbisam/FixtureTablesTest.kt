@@ -66,6 +66,22 @@ class FixtureTablesTest {
     }
 
     @Test
+    fun `bcd with every scale DBISAM allows`() = open("bcd").use { table ->
+        // DBISAM accepts scale 0..4; it rounds extra decimals (row 7) and stored 99999999999999.9999 as 1E14 (row 6).
+        val expected = mapOf(
+            1 to listOf("0", "0.0", "0.00", "0.0000"),
+            2 to listOf("1", "1.0", "1.00", "1.0000"),
+            3 to listOf("-1", "-1.0", "-1.00", "-1.0000"),
+            4 to listOf("12345", "1234.5", "123.45", "1234567.8901"),
+            5 to listOf("-7", "-0.5", "-0.01", "-0.0001"),
+            6 to listOf("9999999999", "999999999.9", "99999999.99", "100000000000000.0000"),
+            7 to listOf("2", "1.3", "1.26", "1.1235"),
+            8 to listOf(null, null, null, null),
+        ).mapValues { (_, v) -> v.map { it?.let(::BigDecimal) } }
+        assertEquals(expected, table.rows().associate { r -> r["id"] as Int to listOf("b0", "b1", "b2", "b4").map { r[it] } })
+    }
+
+    @Test
     fun `encrypted tables, blobs and a non-ASCII password`() {
         val plain = open("alltypes").use { t -> t.values().take(2) to t.rows().take(2).map { it.contentHash().toList() }.toList() }
         open("enc_all", "Test1234").use { t ->
