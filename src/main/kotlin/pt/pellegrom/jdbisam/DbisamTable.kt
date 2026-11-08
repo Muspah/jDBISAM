@@ -4,6 +4,8 @@ import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.EOFException
 import java.io.IOException
+import java.math.BigDecimal
+import java.math.BigInteger
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
@@ -45,7 +47,7 @@ private fun FileChannel.readAt(position: Long, size: Int): ByteBuffer {
 
 /**
  * Encrypted tables use Blowfish-CBC with a zero IV, keyed with the MD5 of the password. The column area is one
- * CBC stream, each row another. The header holds the key encrypted with itself, which identifies the password.
+ * CBC stream, each row another, and each 512-byte .blb block another. The header holds the key encrypted with itself, which identifies the password.
  */
 private class Decryptor(password: String) {
     private val key = SecretKeySpec(MessageDigest.getInstance("MD5").digest(password.toByteArray(ANSI)), "Blowfish")
@@ -59,6 +61,8 @@ private class Decryptor(password: String) {
         return ByteBuffer.wrap(cipher.doFinal(buffer.array())).order(ByteOrder.LITTLE_ENDIAN)
     }
 }
+
+private val TEXT = setOf(ColumnType.STRING, ColumnType.FIXEDCHAR, ColumnType.GUID)
 
 private fun ByteBuffer.u8(at: Int) = get(at).toInt() and 0xFF
 private fun ByteBuffer.u16(at: Int) = getShort(at).toInt() and 0xFFFF
@@ -119,7 +123,8 @@ class DbisamTable private constructor(
         val code = def.u16(0xA4)
         val type = ColumnType.entries.find { it.code == code }
             ?: throw DbisamFormatException("Column $name has unknown type 0x${code.toString(16)}")
-        val length = type.width ?: (def.u16(0xA6) + 1) // strings end in a NUL
+        val declared = def.u16(0xA6)
+        val length = type.width ?: (declared + if (type in TEXT) 1 else 0)
         val offset = def.u16(0xAC)
         if (offset < ROW_HEADER || offset + 1 + length > rowSize) throw DbisamFormatException("Column $name does not fit in a row")
         return Column(position, name, type, offset, length)
@@ -142,25 +147,38 @@ class DbisamTable private constructor(
     inner class Row internal constructor(private val bytes: ByteBuffer) {
         val deleted: Boolean get() = bytes.get(0).toInt() != 0
 
-        /** Unique within a table; whether it survives a table restructure is not verified yet. */
+        /** Unique within a table and kept by optimize and repair; a deleted row's id is not reused. */
         val recordId: Int get() = bytes.getInt(5)
 
         /**
-         * MD5 of the column data, for change detection. Blob contents are not included, only their references.
-         * Computed here because the checksum DBISAM stores in the row does not always match the data.
+         * MD5 of the column values, for change detection. Blobs count with their contents: optimize moves blobs,
+         * and a rewritten blob gets a new id, so their references say nothing. Computed here because the checksum
+         * DBISAM stores in the row does not always match the data.
          */
-        fun contentHash(): ByteArray =
-            MessageDigest.getInstance("MD5").apply { update(bytes.array(), ROW_HEADER, rowSize - ROW_HEADER) }.digest()
+        @Throws(DamagedBlobException::class)
+        fun contentHash(): ByteArray {
+            val md5 = MessageDigest.getInstance("MD5")
+            for (column in columns) {
+                val value = this[column]
+                md5.update(if (value == null) 0 else 1)
+                when (value) {
+                    null -> {}
+                    is Blob -> value.bytes().let { md5.update(ByteBuffer.allocate(4).putInt(it.size).array()); md5.update(it) }
+                    else -> md5.update(bytes.array(), column.offset + 1, column.length)
+                }
+            }
+            return md5.digest()
+        }
 
         operator fun get(name: String): Any? =
             get(byName[name] ?: throw NoSuchElementException("No column named $name"))
 
-        /** String, LocalDate, LocalTime, LocalDateTime, Boolean, Short, Int, Long, Double, Blob, ByteArray (undecoded BCD) or null. */
+        /** String, LocalDate, LocalTime, LocalDateTime, Boolean, Short, Int, Long, Double, BigDecimal, ByteArray, Blob or null. */
         operator fun get(column: Column): Any? {
             if (bytes.get(column.offset).toInt() == 0) return null
             val at = column.offset + 1
             return when (column.type) {
-                ColumnType.STRING -> bytes.ansi(at, column.length).substringBefore('\u0000')
+                ColumnType.STRING, ColumnType.FIXEDCHAR, ColumnType.GUID -> bytes.ansi(at, column.length).substringBefore('\u0000')
                 ColumnType.DATE -> LocalDate.ofEpochDay(bytes.getInt(at) - EPOCH_DAY_ORDINAL)
                 ColumnType.TIME -> LocalTime.ofNanoOfDay(bytes.getInt(at) * 1_000_000L)
                 ColumnType.TIMESTAMP -> {
@@ -169,15 +187,33 @@ class DbisamTable private constructor(
                 }
                 ColumnType.BOOLEAN -> bytes.getShort(at).toInt() != 0
                 ColumnType.SMALLINT -> bytes.getShort(at)
+                ColumnType.WORD -> bytes.u16(at)
                 ColumnType.INTEGER, ColumnType.AUTOINC -> bytes.getInt(at)
                 ColumnType.LARGEINT -> bytes.getLong(at)
                 ColumnType.FLOAT, ColumnType.CURRENCY -> bytes.getDouble(at)
                 ColumnType.BLOB, ColumnType.MEMO, ColumnType.GRAPHIC -> Blob(bytes.getInt(at), bytes.getInt(at + 4))
-                ColumnType.BCD -> bytes.array().copyOfRange(at, at + column.length)
+                ColumnType.BCD -> bcd(at)
+                ColumnType.BYTES -> bytes.array().copyOfRange(at, at + column.length)
+                // ponytail: no stored length seen, so trailing zero bytes cannot be told apart from padding.
+                ColumnType.VARBYTES -> bytes.array().copyOfRange(at, at + column.length).dropLastWhile { it.toInt() == 0 }.toByteArray()
             }
         }
 
         fun values(): List<Any?> = columns.map { this[it] }
+
+        /**
+         * Delphi TBcd: precision (number of digits) @0, sign (bit 7) and decimal places (bits 0-5) @1,
+         * then one digit per nibble.
+         */
+        private fun bcd(at: Int): BigDecimal {
+            val signAndPlaces = bytes.u8(at + 1)
+            val places = signAndPlaces and 0x3F
+            val digits = minOf(bytes.u8(at), 64)
+            val text = (0 until digits).joinToString("") { (bytes.u8(at + 2 + it / 2) shr (if (it % 2 == 0) 4 else 0) and 0xF).toString() }
+            if (digits == 0 || text.any { !it.isDigit() }) throw DbisamFormatException("Malformed BCD at $at")
+            val value = BigDecimal(BigInteger(text), places)
+            return if (signAndPlaces and 0x80 != 0) value.negate() else value
+        }
     }
 
     /** Lazy reference into the .blb file; reading fails only for the blob that is actually damaged. */
@@ -192,8 +228,6 @@ class DbisamTable private constructor(
         @Throws(DamagedBlobException::class)
         fun bytes(): ByteArray {
             val file = blobs ?: throw DamagedBlobException("No .blb file")
-            // ponytail: no encrypted table with blobs to learn the layout from yet.
-            if (decryptor != null) throw UnsupportedOperationException("Blobs of encrypted tables are not supported yet")
             val blockCount = file.size() / BLOCK_SIZE
             val out = ByteArrayOutputStream()
             var block = firstBlock
@@ -203,7 +237,7 @@ class DbisamTable private constructor(
             do {
                 if (block < 1 || block >= blockCount) throw DamagedBlobException("Block $block is outside the .blb file")
                 if (++hops > blockCount) throw DamagedBlobException("Block chain of blob $id loops")
-                val data = file.readAt(block.toLong() * BLOCK_SIZE, BLOCK_SIZE)
+                val data = file.readAt(block.toLong() * BLOCK_SIZE, BLOCK_SIZE).let { decryptor?.decrypt(it) ?: it }
                 if (data.getInt(0) != previous) throw DamagedBlobException("Block $block does not follow block $previous")
                 if (previous == 0) {
                     if (data.getInt(10) != id) throw DamagedBlobException("Block $block is not the start of blob $id")
@@ -214,9 +248,9 @@ class DbisamTable private constructor(
                 out.write(data.array(), BLOCK_DATA, used)
                 previous = block
                 block = data.getInt(4)
-            } while (block != 0)
-            if (out.size() != size) throw DamagedBlobException("Blob $id has ${out.size()} bytes, expected $size")
-            return out.toByteArray()
+            } while (block != 0 && out.size() < size) // a shrunk blob keeps its old chain; only the size says where it ends
+            if (out.size() < size) throw DamagedBlobException("Blob $id has ${out.size()} bytes, expected $size")
+            return out.toByteArray().copyOf(size)
         }
     }
 

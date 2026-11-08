@@ -138,17 +138,18 @@ class DbisamTableTest {
         blb.put(512 + 18, content, 0, 494)
         block(2, 1, 0, 106)
         blb.put(2 * 512 + 18, content, 494, 106)
-        block(3, 0, 4, 494, id = 8, size = 10) // longer than it says
-        block(4, 3, 0, 1)
+        block(3, 0, 4, 494, id = 8, size = 10) // shrunk: the old chain stays, the size says where it ends
+        block(4, 3, 0, 1, id = 11, size = 2) // continues another chain
 
         val f = Fixture("m" to 0x1603)
-        for ((block, id) in listOf(1 to 7, 99 to 9, 1 to 10, 3 to 8)) f.row { val at = it(0); putInt(at, block); putInt(at + 4, id) }
+        for ((block, id) in listOf(1 to 7, 3 to 8, 99 to 9, 1 to 10, 4 to 11)) f.row { val at = it(0); putInt(at, block); putInt(at + 4, id) }
 
         f.open(blb = blb.array()).use { t ->
             val blobs = t.rows().map { it["m"] as DbisamTable.Blob }.toList()
             assertContentEquals(content, blobs[0].bytes())
             assertEquals(String(content, charset("windows-1252")), blobs[0].text())
-            blobs.drop(1).forEach { assertFailsWith<DamagedBlobException> { it.bytes() } }
+            assertEquals(10, blobs[1].bytes().size)
+            blobs.drop(2).forEach { assertFailsWith<DamagedBlobException> { it.bytes() } }
         }
         f.open().use { t ->
             assertFailsWith<DamagedBlobException> { (t.rows().first()["m"] as DbisamTable.Blob).bytes() }

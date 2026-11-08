@@ -1,0 +1,181 @@
+TABEL alltypes  (C:\jdbisam-testdata\alltypes.dat / .idx / .blb)
+=====================================================================
+Gemaakt met: DBISAM Database System Utility, Version 4.52 (4.52 Build 1)
+Datum: 2026-11-08
+Codering van dit .txt-bestand: UTF-8. In de tabel staan tekens als
+Windows-1252/ANSI (Locale "ANSI Standard"); gecontroleerd in alltypes.dat:
+"€éëß'A" staat als bytes 80 E9 EB DF 27 41.
+
+Werkwijze: tabel aangemaakt met SQL (File > New SQL Query) op database
+C:\jdbisam-testdata, rijen ingevoegd met SQL INSERT, daarna Blob/Graphic
+van rij 1 geladen via de grid (dubbelklik op veld > Import...).
+De exacte SQL staat onderaan.
+
+---------------------------------------------------------------------
+HEADER (Utility, tab Structure / Alter Table)
+---------------------------------------------------------------------
+Version #           : 3 . 7      (ingesteld in stap 2 via Utilities > Alter Table;
+                                  daarvoor 1 . 0)
+Description         : Testtabel alle types   (ingesteld in stap 2)
+Encrypted           : No
+Locale              : ANSI Standard
+Index Page Size     : 4096
+BLOB Block Size     : 512
+Last Auto-Inc Value : 5
+# of Fields         : 21
+Total Record Size   : 248
+Indexen             : alleen "Primary Index" (veld RecordID, door DBISAM zelf)
+
+---------------------------------------------------------------------
+VELDEN (namen van Data Type en Size exact zoals de Utility ze toont)
+---------------------------------------------------------------------
+ #  Field Name    Data Type   Size  Required  Details   (SQL-type gebruikt)
+ 1  id            Integer        0  No        No        INTEGER
+ 2  f_string      String        10  No        No        VARCHAR(10)
+ 3  f_fixedchar   FixedChar     10  No        No        CHAR(10)
+ 4  f_guid        GUID          38  No        No        GUID
+ 5  f_bytes       Bytes          8  No        No        BYTES(8)
+ 6  f_varbytes    VarBytes      16  No        No        VARBYTES(16)
+ 7  f_blob        BLOB           0  No        No        BLOB
+ 8  f_graphic     Graphic        0  No        No        GRAPHIC
+ 9  f_memo        Memo           0  No        No        MEMO
+10  f_date        Date           0  No        No        DATE
+11  f_time        Time           0  No        No        TIME
+12  f_timestamp   Timestamp      0  No        No        TIMESTAMP
+13  f_boolean     Boolean        0  No        No        BOOLEAN
+14  f_smallint    SmallInt       0  No        No        SMALLINT
+15  f_word        Word           0  No        No        WORD
+16  f_integer     Integer        0  No        No        INTEGER
+17  f_autoinc     AutoInc        0  No        No        AUTOINC
+18  f_largeint    LargeInt       0  No        No        LARGEINT
+19  f_float       Float          0  No        No        FLOAT
+20  f_currency    Currency       0  No        No        MONEY
+21  f_bcd         BCD            2  No        No        NUMERIC(10,2)
+
+De Utility biedt precies deze 20 datatypes aan (dropdown in New Table):
+String, FixedChar, GUID, Bytes, VarBytes, BLOB, Graphic, Memo, Date, Time,
+Timestamp, Boolean, SmallInt, Word, Integer, AutoInc, LargeInt, Float,
+Currency, BCD. Alle 20 zitten in de tabel (Integer twee keer: id en f_integer).
+
+BCD: in SQL aangemaakt als NUMERIC(10,2). De Utility toont alleen
+"Size 2" (= schaal / aantal decimalen). Een precisie wordt in de Utility
+niet getoond; precisie 10 is dus niet zichtbaar opgeslagen.
+
+---------------------------------------------------------------------
+RIJEN - zoals ingevoerd
+  NULL = niet ingevuld; '' = lege tekst ingevoerd
+  Na het "->" staat wat DBISAM er volgens controle-query's van maakte,
+  als dat afwijkt.
+---------------------------------------------------------------------
+
+RIJ 1 (gewone waarden)
+  id           = 1
+  f_string     = 'Hallo'
+  f_fixedchar  = 'Vast'
+  f_guid       = '{0F1E2D3C-4B5A-6978-8796-A5B4C3D2E1F0}'
+  f_bytes      = 'ABCDEFGH'   (via CAST('ABCDEFGH' AS BYTES(8)) = 41 42 43 44 45 46 47 48)
+  f_varbytes   = 'Hallo'      (via CAST('Hallo' AS VARBYTES(16)) = 48 61 6C 6C 6F)
+  f_blob       = 92 bytes verzonnen tekst: 'jdbisam test blob: made-up bytes, no real data. ' herhaald tot 92 bytes
+                 (Utility toonde na Import "BLOB Size 92")
+  f_graphic    = 4150 bytes verzonnen BMP (32x32, 32 bit, kleurverloop),
+  (Achteraf in de .blb vervangen door verzonnen bytes van dezelfde grootte; eerst stond hier een Windows-bestand.)
+                 4150 bytes (Utility toonde na Import "Graphic Size 4150")
+  f_memo       = 'Korte memo €é'   (13 tekens, LENGTH = 13)
+  f_date       = 2024-02-29        (ingetypt als '2024-02-29')
+  f_time       = 13:45:12.345      (ingetypt als '13:45:12.345')
+  f_timestamp  = 2024-02-29 13:45:12.345
+  f_boolean    = TRUE
+  f_smallint   = 123
+  f_word       = 456
+  f_integer    = 42
+  f_autoinc    = NULL ingevoerd -> DBISAM gaf automatisch 1
+  f_largeint   = 5000000000
+  f_float      = 3.14159
+  f_currency   = 12.34
+  f_bcd        = 123.45   (LET OP: in de opdracht stond "BCD 123." afgekapt;
+                           ik heb 123.45 ingevoerd)
+
+RIJ 2 (alles NULL behalve id)
+  id           = 2
+  alle andere velden = NULL
+  f_autoinc    = NULL ingevoerd -> DBISAM gaf automatisch 2 (AutoInc is dus NIET NULL)
+
+RIJ 3 (randwaarden)
+  id           = 3
+  f_string     = '€éëß''ABCDE'  -> de waarde €éëß'ABCDE (10 tekens, LENGTH = 10,
+                 gecontroleerd met f_string = '€éëß''ABCDE' -> True)
+  f_fixedchar  = NULL
+  f_guid       = NULL
+  f_bytes      = 'AB'   (via CAST('AB' AS BYTES(8)); 2 bytes in een veld van 8)
+  f_varbytes   = '0123456789ABCDEF' (via CAST(... AS VARBYTES(16)); 16 ASCII-bytes 30..46)
+  f_blob       = NULL
+  f_graphic    = NULL
+  f_memo       = 'Lorem ipsum €é ' 110 keer herhaald = 1650 tekens
+                 (LENGTH = 1650; laatste teken is een spatie)
+  f_date       = 0001-01-01        (geaccepteerd, Utility toont 1/1/0001)
+  f_time       = 23:59:59.999
+  f_timestamp  = 1899-12-30 00:00:00
+  f_boolean    = FALSE
+  f_smallint   = -32768   (extra randwaarde, niet gevraagd)
+  f_word       = 65535    (extra randwaarde, niet gevraagd)
+  f_integer    = -1
+  f_autoinc    = automatisch 3
+  f_largeint   = -5000000000
+  f_float      = NULL
+  f_currency   = NULL
+  f_bcd        = NULL
+
+RIJ 4 (lege tekst, max-datum, nullen)
+  id           = 4
+  f_string     = ''   -> DBISAM slaat dit op als NULL (f_string IS NULL = True)
+  f_fixedchar  = ''   -> NULL
+  f_memo       = ''   -> NULL
+  f_bytes      = ''   (via CAST('' AS BYTES(8)))   -> NULL
+  f_varbytes   = ''   (via CAST('' AS VARBYTES(16))) -> NULL
+  f_guid       = NULL
+  f_blob       = NULL
+  f_graphic    = NULL
+  f_date       = 9999-12-31
+  f_time       = NULL
+  f_timestamp  = NULL
+  f_boolean    = NULL
+  f_smallint   = NULL
+  f_word       = NULL
+  f_integer    = NULL
+  f_autoinc    = automatisch 4
+  f_largeint   = NULL
+  f_float      = 0
+  f_currency   = -0.01
+  f_bcd        = -1
+
+RIJ 5 (spaties aan het eind, oude datum)
+  id           = 5
+  f_string     = 'spaties   '  ("spaties" + 3 spaties = 10 tekens)
+                 -> DBISAM bewaart 'spaties' (LENGTH = 7; spaties aan het eind
+                    worden afgeknipt). Bytes in alltypes.dat:
+                    73 70 61 74 69 65 73 00 20 20 ..  (na de NUL staan nog 2
+                    restspaties in het veld - een lezer moet bij de eerste
+                    00-byte stoppen)
+  f_date       = 1850-06-15
+  f_autoinc    = automatisch 5
+  alle andere velden = NULL
+
+---------------------------------------------------------------------
+GEBRUIKTE SQL (exact)
+---------------------------------------------------------------------
+CREATE TABLE "alltypes" (
+ "id" INTEGER, "f_string" VARCHAR(10), "f_fixedchar" CHAR(10), "f_guid" GUID,
+ "f_bytes" BYTES(8), "f_varbytes" VARBYTES(16), "f_blob" BLOB, "f_graphic" GRAPHIC,
+ "f_memo" MEMO, "f_date" DATE, "f_time" TIME, "f_timestamp" TIMESTAMP,
+ "f_boolean" BOOLEAN, "f_smallint" SMALLINT, "f_word" WORD, "f_integer" INTEGER,
+ "f_autoinc" AUTOINC, "f_largeint" LARGEINT, "f_float" FLOAT, "f_currency" MONEY,
+ "f_bcd" NUMERIC(10,2));
+
+INSERT INTO "alltypes" ("id","f_string","f_fixedchar","f_guid","f_bytes","f_varbytes","f_memo","f_date","f_time","f_timestamp","f_boolean","f_smallint","f_word","f_integer","f_largeint","f_float","f_currency","f_bcd") VALUES (1,'Hallo','Vast','{0F1E2D3C-4B5A-6978-8796-A5B4C3D2E1F0}',CAST('ABCDEFGH' AS BYTES(8)),CAST('Hallo' AS VARBYTES(16)),'Korte memo €é','2024-02-29','13:45:12.345','2024-02-29 13:45:12.345',TRUE,123,456,42,5000000000,3.14159,12.34,123.45)
+
+INSERT INTO "alltypes" ("id") VALUES (2)
+
+INSERT INTO "alltypes" ("id","f_string","f_smallint","f_word","f_integer","f_largeint","f_boolean","f_date","f_time","f_timestamp","f_bytes","f_varbytes","f_memo") VALUES (3,'€éëß''ABCDE',-32768,65535,-1,-5000000000,FALSE,'0001-01-01','23:59:59.999','1899-12-30 00:00:00',CAST('AB' AS BYTES(8)),CAST('0123456789ABCDEF' AS VARBYTES(16)),'<"Lorem ipsum €é " x 110>')
+
+INSERT INTO "alltypes" ("id","f_string","f_fixedchar","f_memo","f_bytes","f_varbytes","f_date","f_float","f_currency","f_bcd") VALUES (4,'','','',CAST('' AS BYTES(8)),CAST('' AS VARBYTES(16)),'9999-12-31',0,-0.01,-1);
+INSERT INTO "alltypes" ("id","f_string","f_date") VALUES (5,'spaties   ','1850-06-15');

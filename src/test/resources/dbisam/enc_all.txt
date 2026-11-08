@@ -1,0 +1,54 @@
+TABEL enc_all  (C:\jdbisam-testdata\enc_all.dat / .idx / .blb)
+=====================================================================
+Gemaakt met: DBISAM Database System Utility 4.52 (4.52 Build 1), 2026-11-08
+Codering van dit bestand: UTF-8.
+
+VERSLEUTELD: ja
+WACHTWOORD : Test1234      (testwachtwoord)
+
+Werkwijze:
+ 1. SQL: CREATE TABLE "enc_all" met exact dezelfde velden als alltypes
+    (zie alltypes.txt) - zonder versleuteling.
+    (Eerst geprobeerd met "... ) ENCRYPTED WITH 'Test1234'" in CREATE TABLE;
+     dat gaf een fout, zie LOG.txt.)
+ 2. SQL: INSERT INTO "enc_all" SELECT * FROM "alltypes" WHERE "id" IN (1,2);
+    -> "2 rows affected". Blob en Graphic van rij 1 zijn mee gekopieerd
+       (f_blob IS NULL = False, f_graphic IS NULL = False).
+ 3. Utilities > Alter Table > enc_all: vinkje "Encrypted" aan, Password
+    "Test1234" ingetypt, Alter. De Utility vroeg "Please re-enter the
+    password for encryption and click on the Alter button to continue";
+    wachtwoord nogmaals ingetypt, Alter -> "The table
+    C:\jdbisam-testdata\enc_all was successfully altered".
+
+HEADER
+  Version #           : 1 . 0   (niet gewijzigd)
+  Description         : (leeg)
+  Encrypted           : Yes
+  Locale              : ANSI Standard
+  Index Page Size     : 4096
+  BLOB Block Size     : 512
+  Last Auto-Inc Value : 2
+  # of Fields 21, Total Record Size 248
+
+VELDEN: identiek aan alltypes (zie alltypes.txt), BCD Size 2.
+
+RIJEN (gekopieerd uit alltypes, dus identiek aan alltypes rij 1 en 2):
+RIJ 1
+  id 1, f_string 'Hallo', f_fixedchar 'Vast',
+  f_guid '{0F1E2D3C-4B5A-6978-8796-A5B4C3D2E1F0}',
+  f_bytes 'ABCDEFGH' (41..48), f_varbytes 'Hallo' (48 61 6C 6C 6F),
+  f_blob = 92 bytes verzonnen tekst: 'jdbisam test blob: made-up bytes, no real data. ' herhaald tot 92 bytes,
+  f_graphic = 4150 bytes verzonnen BMP (32x32, 32 bit, kleurverloop),
+  (Achteraf in de .blb vervangen door verzonnen bytes van dezelfde grootte; eerst stond hier een Windows-bestand.)
+  f_memo 'Korte memo €é', f_date 2024-02-29, f_time 13:45:12.345,
+  f_timestamp 2024-02-29 13:45:12.345, f_boolean TRUE, f_smallint 123,
+  f_word 456, f_integer 42, f_autoinc 1, f_largeint 5000000000,
+  f_float 3.14159, f_currency 12.34, f_bcd 123.45
+RIJ 2
+  id 2, f_autoinc 2, alle andere velden NULL
+
+Gecontroleerd vóór versleuteling met
+  SELECT "id","f_autoinc","f_string",("f_blob" IS NULL),("f_graphic" IS NULL),
+         LENGTH("f_memo"),"f_largeint","f_bcd" FROM "enc_all"
+  -> 1 | 1 | Hallo | False | False | 13 | 5000000000 | 123.45
+  -> 2 | 2 |       | True  | True  | 0  |            |

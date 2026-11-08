@@ -1,0 +1,42 @@
+TABEL enc_odd  (C:\jdbisam-testdata\enc_odd.dat / .idx; geen .blb want geen BLOB-velden)
+=====================================================================
+Gemaakt met: DBISAM Database System Utility 4.52 (4.52 Build 1), 2026-11-08
+Codering van dit bestand: UTF-8.
+
+VERSLEUTELD: ja
+WACHTWOORD : Tést€1      (testwachtwoord; 6 tekens: T, é, s, t, €, 1)
+  Unicode : U+0054 U+00E9 U+0073 U+0074 U+20AC U+0031
+  In Windows-1252 (ANSI) zou dat zijn: 54 E9 73 74 80 31.
+  Het wachtwoord is in het (gemaskeerde) Password-veld van de Utility
+  ingetypt; hoe de Utility het intern naar bytes omzet heb ik niet kunnen
+  zien. Wel gecontroleerd: de tabel daarna openen met File > Open Table
+  vraagt om een wachtwoord, en met "Tést€1" ging hij open en toonde de
+  3 rijen.
+
+Werkwijze:
+ 1. SQL: CREATE TABLE "enc_odd" ("id" INTEGER, "s" VARCHAR(3));
+ 2. SQL: INSERT INTO "enc_odd" ("id","s") VALUES (1,'a');
+         INSERT INTO "enc_odd" ("id","s") VALUES (2,'bb');
+         INSERT INTO "enc_odd" ("id","s") VALUES (3,'ccc');
+    -> "3 rows affected"
+ 3. Utilities > Alter Table > enc_odd: Encrypted aan, Password "Tést€1",
+    Alter; op verzoek wachtwoord nogmaals ingetypt, Alter ->
+    "The table C:\jdbisam-testdata\enc_odd was successfully altered".
+
+HEADER
+  Version # 1 . 0, Description (leeg), Encrypted Yes, Locale ANSI Standard,
+  Index Page Size 4096, BLOB Block Size 512, Last Auto-Inc Value 0
+  # of Fields 2, Total Record Size 40
+
+VELDEN
+ #  Field Name  Data Type  Size  Required
+ 1  id          Integer       0  No
+ 2  s           String        3  No
+
+RIJEN
+  RIJ 1: id = 1, s = 'a'
+  RIJ 2: id = 2, s = 'bb'
+  RIJ 3: id = 3, s = 'ccc'
+
+LET OP: in de opdracht was de tekst afgekapt: 3 rijen ("a", "b ... "ccc").
+Ik heb voor de tweede rij 'bb' gebruikt (lengte 1, 2, 3 tekens).

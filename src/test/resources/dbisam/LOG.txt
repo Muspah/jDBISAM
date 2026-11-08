@@ -1,0 +1,93 @@
+LOG jdbisam-testdata (aangemaakt 2026-11-08)
+=============================================
+Codering van dit bestand: UTF-8.
+
+STAP 0 - Versie (Help -> About in Database System Utility)
+  "DBISAM Database System Utility"
+  "Version 4.52 (4.52 Build 1)"
+  "Copyright (c) 2025 Elevate Software, Inc."
+  Programma: C:\Program Files (x86)\DBISAM 4 ADD\utils\dbsys\win32\dbsys.exe
+
+Werkwijze algemeen
+  - Alles in C:\jdbisam-testdata. Geen andere databases of mappen geopend
+    (in de mapkiezer stond ook een map C:\jdbisam_testdata met underscore;
+    die heb ik NIET gebruikt of geopend).
+  - Tabellen gemaakt en gevuld via File > New SQL Query in de Utility
+    (exacte SQL in de .txt-bestanden); Blob/Graphic geladen via de grid,
+    beschrijving/versie/versleuteling via Utilities > Alter Table
+    (de Utility heeft geen menu-item "Restructure"; "Alter Table..." is het
+    equivalent).
+  - Bestanden gekopieerd met PowerShell Copy-Item in plaats van Verkenner.
+  - De .txt-bestanden heb ik rechtstreeks geschreven (UTF-8).
+
+FOUTMELDINGEN (exact) en wat ik daarna deed
+---------------------------------------------
+1. INSERT met datumliterals in de vorm DATE '2024-02-29':
+   "DBISAM Engine Error # 11949 SQL parsing error - Expected ) but instead
+    found '2024-02-29' in INSERT SQL statement at line 1, column 325"
+   -> opgelost: datums/tijden als gewone string '2024-02-29' enz.
+
+2. INSERT met bytes als string 'ABCDEFGH' in een Bytes-veld:
+   "DBISAM Engine Error # 11949 SQL parsing error - Expected NULL, Bytes, or
+    VarBytes expression but instead found 'ABCDEFGH' in INSERT SQL statement
+    at line 1, column 285"
+   -> opgelost met CAST('ABCDEFGH' AS BYTES(8)) / CAST(... AS VARBYTES(16)).
+
+3. INSERT met hex-literal X'4142434445464748':
+   "DBISAM Engine Error # 11949 SQL parsing error - Expected ) but instead
+    found '4142434445464748' in INSERT SQL statement at line 1, column 286"
+   -> niet ondersteund; CAST gebruikt (zie 2).
+
+4. Alter Table op alltypes terwijl het SQL-venster nog open stond:
+   "DBISAM Engine Error # 11013 Access denied to table or backup file 'alltypes'"
+   -> SQL-venster gesloten, Alter Table opnieuw: gelukt.
+
+5. CREATE TABLE "enc_all" (...) ENCRYPTED WITH 'Test1234':
+   "DBISAM Engine Error # 11949 SQL parsing error - Expected end of statement
+    but instead found ENCRYPTED in CREATE TABLE SQL statement at line 23, column 3"
+   -> tabel zonder versleuteling gemaakt en daarna versleuteld via
+      Utilities > Alter Table (Encrypted + Password).
+
+6. Controle-query met LENGTH("f_blob"):
+   "DBISAM Engine Error # 11949 SQL parsing error - Expected NULL, Memo
+    expression but instead found "f_blob" in SELECT SQL statement at line 1,
+    column 43"
+   -> alleen een controle-query; vervangen door ("f_blob" IS NULL).
+
+GEDRAG VAN DBISAM DAT AFWIJKT VAN WAT IS INGEVOERD (belangrijk voor de lezer)
+---------------------------------------------
+a. Lege tekst '' wordt als NULL opgeslagen. Geldt voor String, FixedChar,
+   Memo, Bytes en VarBytes (alltypes rij 4: "IS NULL" gaf True voor alle vijf).
+   Een "lege tekst die niet NULL is" kon ik dus niet maken.
+b. Spaties aan het eind van een String worden afgeknipt:
+   'spaties   ' (10 tekens) werd 'spaties' (LENGTH 7). In het .dat-bestand
+   staat 73 70 61 74 69 65 73 00 20 20: NUL na 'spaties', daarna nog 2
+   restspaties.
+c. AutoInc wordt altijd automatisch gevuld (1..5), ook in de "alles NULL"-rij 2.
+d. BCD: Utility toont alleen Size = 2 (schaal). Precisie (10 in de SQL) wordt
+   niet getoond.
+e. Datum 0001-01-01 en 9999-12-31 werden zonder fout geaccepteerd.
+f. Alter Table, Optimize en Repair laten reservekopieën achter
+   (*.dbk, *.ibk, *.bbk) in C:\jdbisam-testdata. Die heb ik laten staan.
+
+AFKAPPINGEN IN DE OPDRACHT (eigen keuze, niet gegokt over DBISAM)
+---------------------------------------------
+- "BCD 123." -> ik heb 123.45 gebruikt (NUMERIC(10,2)).
+- enc_odd rijen ("a", "b ... "ccc") -> 'a', 'bb', 'ccc'.
+- Waarden voor FixedChar ('Vast'), GUID, SmallInt (123), Word (456) in rij 1
+  waren niet opgegeven; zelf gekozen en genoteerd in alltypes.txt.
+
+RESULTAAT PER STAP
+---------------------------------------------
+Stap 0  gelukt (versie hierboven)
+Stap 1  gelukt: alltypes met alle 20 aangeboden types + id, 5 rijen;
+        Blob = 92 bytes verzonnen tekst: 'jdbisam test blob: made-up bytes, no real data. ' herhaald tot 92 bytes;
+        Graphic = 4150 bytes verzonnen BMP (32x32, 32 bit, kleurverloop)
+  (Achteraf in de .blb vervangen door verzonnen bytes van dezelfde grootte; eerst stond hier een Windows-bestand.)
+        Rij 4 ('' -> NULL) en rij 5 (spaties afgeknipt): zie a/b.
+Stap 2  gelukt: Description "Testtabel alle types", Version 3.7
+        (melding "The table C:\jdbisam-testdata\alltypes was successfully altered")
+Stap 3  gelukt: enc_all (Test1234) en enc_odd (Tést€1), beide via Alter Table.
+        enc_odd geopend met het wachtwoord ter controle: werkt.
+Stap 4  gelukt: stap0..stap7 gekopieerd; Optimize en Repair bestaan en zijn uitgevoerd.
+Stap 5  zie samenvatting in de chat / bestandenlijst hieronder.

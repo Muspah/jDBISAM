@@ -1,0 +1,105 @@
+TABEL changes  (C:\jdbisam-testdata\changes.dat / .idx / .blb)
+=====================================================================
+Gemaakt met: DBISAM Database System Utility 4.52 (4.52 Build 1), 2026-11-08
+Codering van dit bestand: UTF-8.
+
+HEADER: Version # 1 . 0, Description (leeg), Encrypted No, Locale ANSI Standard,
+        Index Page Size 4096, BLOB Block Size 512.
+
+VELDEN (Data Type zoals de Utility ze noemt)
+ #  Field Name  Data Type  Size   (SQL-type gebruikt)
+ 1  id          Integer       0   INTEGER
+ 2  naam        String       20   VARCHAR(20)
+ 3  bedrag      Currency      0   MONEY
+ 4  notitie     Memo          0   MEMO
+
+BEGINVULLING (SQL):
+  CREATE TABLE "changes" ("id" INTEGER, "naam" VARCHAR(20), "bedrag" MONEY, "notitie" MEMO);
+  INSERT INTO "changes" VALUES (1,'Persoon A',10.00,'Notitie 1');
+  INSERT INTO "changes" VALUES (2,'Persoon B',20.00,'Notitie 2');
+  INSERT INTO "changes" VALUES (3,'Persoon C',30.00,'Notitie 3');
+  INSERT INTO "changes" VALUES (4,'Persoon D',40.00,'Notitie 4');
+  INSERT INTO "changes" VALUES (5,'Persoon E',50.00,'Notitie 5');
+  -> "5 rows affected"
+
+Werkwijze per stap: wijziging uitvoeren in een SQL-venster van de Utility
+(File > New SQL Query), daarna het SQL-venster sluiten (File > Close) zodat
+de tabel niet meer open is, en dan changes.dat/.idx/.blb kopiëren naar
+C:\jdbisam-testdata\changes\stapN.
+Bij Optimize en Repair stond de tabel niet open (die utilities openen de
+tabel zelf exclusief en sluiten hem weer).
+
+---------------------------------------------------------------------
+STAP  WAT IK DEED                                        RESULTAAT
+---------------------------------------------------------------------
+stap0 Beginstand (na de 5 INSERTs hierboven).
+      Rijen: 1 Persoon A 10.00 'Notitie 1' | 2 Persoon B 20.00 'Notitie 2' |
+             3 Persoon C 30.00 'Notitie 3' | 4 Persoon D 40.00 'Notitie 4' |
+             5 Persoon E 50.00 'Notitie 5'
+
+stap1 UPDATE "changes" SET "bedrag" = 25.00 WHERE "id" = 2      1 rows affected
+      (rij 2: bedrag 20.00 -> 25.00)
+
+stap2 UPDATE "changes" SET "notitie" = '<tekst>' WHERE "id" = 3  1 rows affected
+      <tekst> = 'Lorem ipsum €é ' 110 keer herhaald = 1650 tekens
+      (laatste teken is een spatie). € en é staan als ANSI 80 / E9.
+
+stap3 UPDATE "changes" SET "notitie" = 'Kort' WHERE "id" = 3     1 rows affected
+      (rij 3: notitie terug naar 'Kort', 4 tekens)
+
+stap4 DELETE FROM "changes" WHERE "id" = 4                      1 rows affected
+      (rij 4 Persoon D verwijderd)
+
+stap5 INSERT INTO "changes" VALUES (6,'Persoon F',60.00,'Notitie 6')   1 rows affected
+
+stap6 Utilities > Optimize Table... > changes; gevraagde index: "Primary Index"
+      (Fields: RecordID) > Select.
+      Melding: "The table C:\jdbisam-testdata\changes was successfully optimized"
+      DBISAM maakte daarbij reservekopieën changes.dbk / changes.ibk / changes.bbk
+      in C:\jdbisam-testdata (stand van vóór de optimize = stand stap5).
+
+stap7 Utilities > Repair Table... > changes ("Force index rebuild" NIET aangevinkt)
+      > Repair. Melding: "The table C:\jdbisam-testdata\changes was successfully
+      repaired". Repair Log Messages:
+        "Repair of table changes started at 11/8/2026 12:42:12 PM..."
+        "Repair of table changes completed at 11/8/2026 12:42:12 PM..."
+
+EINDSTAND (gecontroleerd na stap7 met
+  SELECT "id","naam","bedrag","notitie",LENGTH("notitie") FROM "changes"):
+  1 | Persoon A | 10.00 | Notitie 1 | 9
+  2 | Persoon B | 25.00 | Notitie 2 | 9
+  3 | Persoon C | 30.00 | Kort      | 4
+  5 | Persoon E | 50.00 | Notitie 5 | 9
+  6 | Persoon F | 60.00 | Notitie 6 | 9
+
+---------------------------------------------------------------------
+GEKOPIEERDE BESTANDEN (grootte in bytes, MD5)
+---------------------------------------------------------------------
+stap0 changes.blb    3072 A018E00978CF48DE653EBE40DD6CDD81
+stap0 changes.dat    3944 EAED67B524427923045ABB7BC3AC299F
+stap0 changes.idx   33280 CB973685AEBB826CCA0C0D8017DD8BD0
+stap1 changes.blb    3072 A018E00978CF48DE653EBE40DD6CDD81
+stap1 changes.dat    3944 76974AB02FD76B76058457419B0072ED
+stap1 changes.idx   33280 CB973685AEBB826CCA0C0D8017DD8BD0
+stap2 changes.blb    4608 3E48B2CE0FA36972372B6375FA570941
+stap2 changes.dat    3944 F1B0DA190442A07DF4E8C75BE47B163C
+stap2 changes.idx   33280 CB973685AEBB826CCA0C0D8017DD8BD0
+stap3 changes.blb    4608 F35157AD27A26954E618F44BECCB43CD
+stap3 changes.dat    3944 4FCBB7B4A41EE7CE19A5ADB28000DAB7
+stap3 changes.idx   33280 CB973685AEBB826CCA0C0D8017DD8BD0
+stap4 changes.blb    4608 ECA65E0050B5103347F3B47669AB1C68
+stap4 changes.dat    3944 440835465F8614C0D806E01D649422C1
+stap4 changes.idx   33280 9B63377F1FF6FBB334860ECB0CEDDA2B
+stap5 changes.blb    4608 63652CC4804B75CE15FACC577B75D6A5
+stap5 changes.dat    3944 837D0B8589F43926564A20EA19880256
+stap5 changes.idx   33280 A2D98B6282D562E3CC51165D6DE362DA
+stap6 changes.blb    3072 6AE9583F6A7666CE5AC7120B689AFE56
+stap6 changes.dat    3944 7BEC47E0D8E7C7AC4B3C657E4F960A7E
+stap6 changes.idx   33280 3F7EDB7642015BB0FDC7D6C01414184A
+stap7 changes.blb    3072 6D281D3B5F3F6FA0D496A685211CAB8B
+stap7 changes.dat    3944 9E96CC8DD38FA253042AEEF8FFC8948C
+stap7 changes.idx   33280 C14C382153928EA0506D5E04DD3EAD05
+
+Opvallend: .idx verandert pas bij stap4 (delete); stap1-3 raken alleen
+.dat/.blb. Stap6 (optimize) maakt .blb weer 3072 bytes.
+Het kopiëren is gedaan met PowerShell Copy-Item (niet via Verkenner).

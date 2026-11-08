@@ -2,6 +2,7 @@ target/
 
 # Real databases and backups never belong in this repo; tests generate their own tables.
 /testdata*/
+/jdbisam-testdata/
 *.7z
 *.zip
 *.dat
@@ -13,3 +14,5 @@ target/
 *.lck
 *.env
 .env*
+# Except tables made with DBISAM itself from made-up data, as test fixtures.
+!/src/test/resources/dbisam/**

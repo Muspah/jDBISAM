@@ -22,15 +22,17 @@ mvn -q exec:java -Dexec.args="csv path/to/x.dat"      # data as CSV
 
 | Column type | Kotlin value |
 |---|---|
-| STRING | `String` (Windows-1252, up to the first NUL) |
+| STRING, FIXEDCHAR, GUID | `String` (Windows-1252, up to the first NUL) |
 | DATE / TIME / TIMESTAMP | `LocalDate` / `LocalTime` / `LocalDateTime` |
 | BOOLEAN | `Boolean` |
-| SMALLINT / INTEGER, AUTOINC / LARGEINT | `Short` / `Int` / `Long` |
+| SMALLINT / WORD, INTEGER, AUTOINC / LARGEINT | `Short` / `Int` / `Long` |
 | FLOAT, CURRENCY | `Double` |
+| BCD | `BigDecimal` |
+| BYTES / VARBYTES | `ByteArray`: the full field / without trailing zero bytes |
 | BLOB, MEMO, GRAPHIC | `DbisamTable.Blob`, read lazily with `bytes()` or `text()` |
-| BCD | raw `ByteArray`, not decoded |
 
-`null` means the column's null flag is clear. Delphi's zero date 1899-12-30 is returned as is.
+`null` means the column's null flag is clear. DBISAM itself stores `''` as null and trims trailing spaces.
+Delphi's zero date 1899-12-30 is returned as is.
 
 Errors: `DbisamFormatException` when a table cannot be read at all (empty, inconsistent, missing or wrong password),
 `DamagedBlobException` for a single damaged blob; the rest of the table stays readable.
@@ -39,7 +41,8 @@ Errors: `DbisamFormatException` when a table cannot be read at all (empty, incon
 
 DBISAM keeps no change log. Use `row.recordId` as key and `row.contentHash()` to see whether a row changed;
 the header's `lastModified` matches the file's modification time, so unchanged tables can be skipped.
-Blob contents are not part of the hash.
+Record ids survive optimize and repair, and a deleted row's id is not reused (its slot is).
+The hash covers blob contents, since optimize moves blobs and a rewritten blob gets a new id.
 
 ## File format
 
@@ -63,27 +66,29 @@ Each column starts with a null-flag byte, then the value.
 | 0x04 | boolean | 2 |
 | 0x05 / 0x06 / 0x12 | 16 / 32 / 64-bit integer | 2 / 4 / 8 |
 | 0x07 / 0x1507 | float / currency, IEEE double | 8 |
-| 0x08 | BCD (Delphi `TBcd`) | 34 |
+| 0x08 | BCD (Delphi `TBcd`: precision, sign + places, one digit per nibble) | 34 |
+| 0x09 / 0x0F | bytes / varbytes, zero-padded, no length stored | declared length |
 | 0x0A | time, ms since midnight | 4 |
 | 0x0B | timestamp, ms since 0001-01-01 minus one day, as double | 8 |
+| 0x0C | word, unsigned 16-bit | 2 |
 | 0x1D06 | autoinc | 4 |
+| 0x1F01 / 0x3201 | fixed char / GUID as text | declared length + 1 |
 
 **Encryption**: Blowfish-CBC with a zero IV, key = MD5 of the password (Windows-1252). The header itself is not
-encrypted. The column blocks together form one CBC stream, and each row is its own stream; encrypted tables have
-row sizes that are a multiple of 8. The password check is the key encrypted with itself.
+encrypted. The column blocks together form one CBC stream, each row is its own stream, and so is each .blb block;
+encrypted tables have row sizes that are a multiple of 8. The password check is the key encrypted with itself.
 
 **Blobs** (`.blb`): 512-byte blocks, block 0 is a header. Each block: previous `u32 @0`, next `u32 @4` (0 = last),
-bytes used `u16 @8`, data from 18. The first block of a blob also has its id `u32 @10` and total size `u32 @14`.
+bytes used `u16 @8`, data from 18. The first block of a blob also has its id `u32 @10` and total size `u32 @14`. A shrunk blob keeps its old chain,
+so reading stops at the total size.
 
 ## Known gaps
 
-- Blobs of encrypted tables are refused (`UnsupportedOperationException`): no example seen yet. Passwords with
-  non-ASCII characters are untested.
-- BOOLEAN, LARGEINT, BCD and GRAPHIC were seen with very few or no values, so their decoding is weakly verified.
-- Some blob chains hold more bytes than their declared size; these are reported as damaged.
-- Whether `recordId` survives a restructure, and whether a memo edit changes the row, needs two snapshots to verify.
+- VARBYTES ending in zero bytes lose them: no stored length was found.
+- Only checked against DBISAM 4.52; BCD only with scale 2.
 
 ## Tests
 
-`mvn verify` runs tests on generated tables. `JDBISAM_TESTDATA=<dir> mvn test` also reads every `.dat` under `<dir>`
+`mvn verify` runs tests on generated tables and on tables made with DBISAM 4.52 from made-up data
+(`src/test/resources/dbisam`, with notes on what went in). `JDBISAM_TESTDATA=<dir> mvn test` also reads every `.dat` under `<dir>`
 and checks invariants without printing any data; set `JDBISAM_PASSWORD` to include encrypted tables. Keep real databases out of the repo; `testdata-private/` is ignored.
