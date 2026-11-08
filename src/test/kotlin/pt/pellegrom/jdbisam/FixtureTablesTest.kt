@@ -82,6 +82,17 @@ class FixtureTablesTest {
     }
 
     @Test
+    fun `varbytes keep no length`() = open("varbytes").use { table ->
+        // Rows 1 and 2 ('A' and 'A' + #0) are identical on disk; rows 3-5 hold leftover bytes DBISAM wrote after a #0.
+        fun hex(vararg b: Int) = b.map { it.toByte() }
+        val expected = mapOf(
+            1 to hex(0x41), 2 to hex(0x41), 3 to hex(0x41, 0, 0x52, 0, 0xD0), 4 to hex(0, 0xB8), 5 to hex(0x41, 0, 0x53),
+            6 to hex(0x41, 0x42), 7 to bytes("ABCDEFG"), 8 to null,
+        )
+        assertEquals(expected, table.values().associate { it["id"] as Int to it["v"] })
+    }
+
+    @Test
     fun `encrypted tables, blobs and a non-ASCII password`() {
         val plain = open("alltypes").use { t -> t.values().take(2) to t.rows().take(2).map { it.contentHash().toList() }.toList() }
         open("enc_all", "Test1234").use { t ->

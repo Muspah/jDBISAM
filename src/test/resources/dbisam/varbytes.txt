@@ -1,0 +1,239 @@
+TABEL varbytes  (C:\jdbisam-testdata\varbytes.dat / .idx; geen .blb ontstaan)
+=====================================================================
+Gemaakt met: DBISAM Database System Utility, Version 4.52 (4.52 Build 1)
+Datum: 2026-11-08
+Codering van dit .txt-bestand: UTF-8.
+
+Doel: uitzoeken of DBISAM de lengte van een VARBYTES-waarde onthoudt als
+de waarde eindigt op nul-bytes.
+
+Werkwijze: database C:\jdbisam-testdata, alles via File > New SQL Query.
+De tab Structure is bekeken via File > Open Table met "Read-Only" aangevinkt.
+Na de controles is niets meer aan de tabel veranderd.
+
+Bestanden na afloop:
+  varbytes.dat   3200 bytes  MD5 8180015ACA4A8F24D863BCF678F00FC4  (laatst geschreven 14:05:28)
+  varbytes.idx  33280 bytes  MD5 62528B12DBB3BDE363638B9740585B69
+  Hulpbestanden (gemaakt voor methode c, die niet bruikbaar bleek):
+  r1_41.bin                  1 byte : 41
+  r2_4100.bin                2 bytes: 41 00
+  r3_41000000.bin            4 bytes: 41 00 00 00
+  r4_00.bin                  1 byte : 00
+  r5_0041.bin                2 bytes: 00 41
+  r6_410042.bin              3 bytes: 41 00 42
+  r7_4142434445464700.bin    8 bytes: 41 42 43 44 45 46 47 00
+  (Gemaakt met Bash printf; het voorgestelde PowerShell-commando met
+   [IO.File]::WriteAllBytes werd door de virusscanner geblokkeerd:
+   "This script contains malicious content and has been blocked by your
+    antivirus software.")
+
+=====================================================================
+KORTE CONCLUSIE
+=====================================================================
+1. Een VARBYTES(8)-veld staat in het .dat-bestand als 1 vlag-byte + 8 vaste
+   databytes, ZONDER lengteveld. Precies hetzelfde als BYTES(8).
+   Uit het bestand zelf kun je dus niet afleiden of een waarde 41 of 41 00 was:
+   DBISAM onthoudt de lengte niet op schijf.
+   (Bewijs: Total Record Size 48 = 25 bytes kop + 5 (id: vlag+4) + 9 (v: vlag+8)
+    + 9 (b: vlag+8), zie "OPBOUW RECORD". In de veldbeschrijving in de header
+    hebben v en b allebei grootte 8 en verschillen ze alleen in de typecode:
+    v = 0x0F, b = 0x09.)
+2. Echte nul-bytes kon ik met geen van de drie methodes invoeren:
+   a. X'...'-hexliteral: parse-fout.
+   b. CHR(0): parse-fout. #0 wordt WEL geaccepteerd, maar gedraagt zich als
+      lege tekst: #0 + 'A' werd 41, 'A' + #0 + 'B' werd 41 42. Na het eind van
+      de tekst kwamen bovendien willekeurige restbytes in het veld (52 D0, B8, 53).
+   c. In het grid opent dubbelklikken op een VarBytes- of Bytes-veld geen
+      dialoog (geen Import...); F2 geeft alleen een tekstcel "(VARBYTES)".
+   De tabel bevat dus NIET de gevraagde bytes, maar wat methode b (#0)
+   opleverde. Zie per rij hieronder.
+
+=====================================================================
+AANPASSINGEN EN FOUTMELDINGEN (in volgorde)
+=====================================================================
+1. CREATE TABLE "varbytes" ("id" INTEGER, "v" VARBYTES(8), "b" BYTES(8));  -> gelukt
+
+2. Methode a - hexliteral:
+   INSERT INTO "varbytes" VALUES (2, X'4100', X'4100');
+   -> "DBISAM Engine Error # 11949 SQL parsing error - Expected ) but instead
+       found '4100' in INSERT SQL statement at line 1, column 36"
+   INSERT INTO "varbytes" VALUES (2, CAST(X'4100' AS VARBYTES(8)), CAST(X'4100' AS BYTES(8)));
+   -> "DBISAM Engine Error # 11949 SQL parsing error - Expected AS or , but
+       instead found '4100' in INSERT SQL statement at line 1, column 41"
+   => werkt niet.
+
+3. Methode b - teken 0:
+   INSERT INTO "varbytes" VALUES (2, CAST('A' + CHR(0) AS VARBYTES(8)), CAST('A' + CHR(0) AS BYTES(8)));
+   -> "DBISAM Engine Error # 11949 SQL parsing error - Expected AS or , but
+       instead found ( in INSERT SQL statement at line 1, column 49"
+   In de Help van de Utility (dbsys.hlp) staat geen lijst met SQL-functies;
+   gezocht op CHR, CHAR(, #0, #13: niets gevonden.
+   Daarna geprobeerd met het #0-teken:
+   INSERT INTO "varbytes" VALUES (2, CAST('A' + #0 AS VARBYTES(8)), CAST('A' + #0 AS BYTES(8)));
+   -> "1 rows affected"  => syntactisch werkt dit.
+
+4. Omdat die proefrij (id 2) als eerste record in de tabel stond, heb ik de
+   tabel verwijderd en opnieuw gemaakt, zodat de records in de volgorde
+   1..8 staan. Alle rijen in één script met methode b (#0) -> "8 rows affected".
+   (De ruwe bytes bleken daarna niet te kloppen, zie punt 1/2 van de conclusie.)
+
+5. Methode c - Import in het grid (getest na het vullen, op de bestaande
+   tabel, File > Open Table): dubbelklik op het v-veld van rij 2 (twee keer)
+   en op het b-veld van rij 2: er opent geen dialoog. F2 op het v-veld geeft
+   een bewerkbare tekstcel met "(VARBYTES)"; met Escape afgebroken.
+   Statusbalk bleef "Browsing"; varbytes.dat bleef 14:05:28 / MD5 ongewijzigd.
+   => Import is voor Bytes/VarBytes niet beschikbaar.
+
+6. Controle LENGTH("v"):
+   SELECT "id", LENGTH("v"), LENGTH("b") FROM "varbytes" ORDER BY "id"
+   -> "DBISAM Engine Error # 11949 SQL parsing error - Expected NULL, Memo
+       expression but instead found "v" in SELECT SQL statement at line 1,
+       column 21"
+   => vervangen door LENGTH(CAST("v" AS VARCHAR(8))).
+
+=====================================================================
+HEADER (Utility, tab Structure)
+=====================================================================
+Version #           : 1 . 0
+Description         : (leeg)
+Encrypted           : No
+Locale              : ANSI Standard
+Index Page Size     : 4096
+BLOB Block Size     : 512
+Last Auto-Inc Value : 0
+# of Fields         : 3
+Total Record Size   : 48
+Indexen             : alleen "Primary Index" (veld RecordID, door DBISAM zelf)
+
+=====================================================================
+VELDEN (exact zoals de Utility ze toont)
+=====================================================================
+ #  Field Name  Data Type  Size  Required   (SQL-type gebruikt)
+ 1  id          Integer       0  No         INTEGER
+ 2  v           VarBytes      8  No         VARBYTES(8)
+ 3  b           Bytes         8  No         BYTES(8)
+
+Veldbeschrijvingen in varbytes.dat (header, 16 bytes vanaf de getoonde offset):
+  id @0x2A0: 00 00 00 00 06 00 00 00 00 04 00 00 19 00 00 00   (type 06, grootte 4, offset 0x19=25)
+  v  @0x5A0: 00 00 00 00 0F 00 08 00 00 08 00 00 1E 00 00 00   (type 0F, 08, grootte 8, offset 0x1E=30)
+  b  @0x8A0: 00 00 00 00 09 00 08 00 00 08 00 00 27 00 00 00   (type 09, 08, grootte 8, offset 0x27=39)
+  (Mijn lezing van deze bytes; de betekenis van elk byte heb ik niet uit
+   documentatie gecontroleerd.)
+
+OPBOUW RECORD (48 bytes, records vanaf 0xB00):
+  offset  0- 4 : 5 bytes kop (00 00 00 00 00)
+  offset  5- 8 : RecordID (Int32)
+  offset  9-24 : 16 bytes (vermoedelijk hash/controle)
+  offset 25    : vlag id (01 = gevuld)
+  offset 26-29 : id (Int32 little-endian)
+  offset 30    : vlag v (01 = gevuld, 00 = NULL)
+  offset 31-38 : v, 8 bytes, GEEN lengtebyte
+  offset 39    : vlag b
+  offset 40-47 : b, 8 bytes
+
+=====================================================================
+RIJEN - zoals ingevoerd -> wat DBISAM ervan maakte
+  "bedoeld" = de bytes uit de opdracht
+  "SQL"     = wat ik werkelijk heb ingevoerd (methode b)
+  "op schijf" = ruwe 8 bytes uit varbytes.dat (v en b waren telkens gelijk)
+  "LEN"     = LENGTH(CAST(x AS VARCHAR(8))) voor v / b
+=====================================================================
+id 1  bedoeld 41
+      SQL       CAST('A' AS VARBYTES(8)) / CAST('A' AS BYTES(8))
+      op schijf v = b = 41 00 00 00 00 00 00 00
+      LEN       v 1 / b 1
+
+id 2  bedoeld 41 00
+      SQL       CAST('A' + #0 AS ...)
+      op schijf v = b = 41 00 00 00 00 00 00 00   (identiek aan rij 1)
+      LEN       v 1 / b 1
+
+id 3  bedoeld 41 00 00 00
+      SQL       CAST('A' + #0 + #0 + #0 AS ...)
+      op schijf v = b = 41 00 52 00 D0 00 00 00   (52 en D0 = restbytes)
+      LEN       v 1 / b 1
+
+id 4  bedoeld 00
+      SQL       CAST(#0 AS ...)
+      op schijf v = b = 00 B8 00 00 00 00 00 00   (B8 = restbyte); NIET NULL (vlag 01)
+      LEN       v 0 / b 0
+
+id 5  bedoeld 00 41
+      SQL       CAST(#0 + 'A' AS ...)
+      op schijf v = b = 41 00 53 00 00 00 00 00   (nul-byte vooraan is verdwenen; 53 = restbyte)
+      LEN       v 1 / b 1
+
+id 6  bedoeld 41 00 42
+      SQL       CAST('A' + #0 + 'B' AS ...)
+      op schijf v = b = 41 42 00 00 00 00 00 00   (nul-byte in het midden is verdwenen)
+      LEN       v 2 / b 2
+
+id 7  bedoeld 41 42 43 44 45 46 47 00
+      SQL       CAST('ABCDEFG' + #0 AS ...)
+      op schijf v = b = 41 42 43 44 45 46 47 00
+      LEN       v 7 / b 7
+
+id 8  bedoeld NULL
+      SQL       alleen "id"
+      op schijf vlag v = 00, vlag b = 00, databytes allemaal 00
+      LEN       v 0 / b 0  ("v" IS NULL = True, "b" IS NULL = True)
+
+Rij 1-7: "v" IS NULL = False en "b" IS NULL = False.
+
+VERGELIJKINGEN ("v" = <zelfde #0-expressie>), uitvoer van de vergelijkingsquery:
+       eq_A  eq_A0  eq_A000 eq_0  eq_0A eq_A0B eq_AB eq_ABCDEFG0 b_eq_A
+  id1  True  True   False   False True  False  False False       True
+  id2  True  False  False   False False False  False False       True
+  id3  False False  False   False False False  False False       False
+  id4  False False  False   True  False False  False False       False
+  id5  False False  False   False False False  False False       False
+  id6  False False  False   False False True   True  False       False
+  id7  False False  False   False False False  False True        False
+  id8  False False  False   False False False  False False       False
+  Let op de tegenstrijdigheid: rij 1 en rij 2 hebben op schijf exact dezelfde
+  bytes, maar eq_A0 is True voor rij 1 en False voor rij 2. Ook eq_0A is True
+  voor rij 1 (41 00..) maar False voor rij 5 (41 00 53 ..). Mijn verklaring:
+  bij het uitrekenen van een #0-expressie komen er willekeurige restbytes
+  achter de tekst, en die verschillen per keer. Vergelijkingen met #0 zijn
+  daardoor niet betrouwbaar. Dat is een verklaring, geen bewezen feit.
+
+GRID (stap 3, rij 2 en 3): dubbelklikken op het v-veld opent geen dialoog,
+dus grootte/inhoud tonen of Export... kon niet. Het grid toont voor rij 1-7
+"(VARBYTES)" / "(BYTES)" (hoofdletters = gevuld) en voor rij 8 "(VarBytes)" /
+"(Bytes)" (gewone letters = NULL).
+
+=====================================================================
+EXACTE SQL DIE ECHT IS UITGEVOERD (in deze volgorde)
+=====================================================================
+CREATE TABLE "varbytes" ("id" INTEGER, "v" VARBYTES(8), "b" BYTES(8));              -- gelukt
+INSERT INTO "varbytes" VALUES (2, X'4100', X'4100');                                  -- FOUT
+INSERT INTO "varbytes" VALUES (2, CAST(X'4100' AS VARBYTES(8)), CAST(X'4100' AS BYTES(8)));        -- FOUT
+INSERT INTO "varbytes" VALUES (2, CAST('A' + CHR(0) AS VARBYTES(8)), CAST('A' + CHR(0) AS BYTES(8)));  -- FOUT
+INSERT INTO "varbytes" VALUES (2, CAST('A' + #0 AS VARBYTES(8)), CAST('A' + #0 AS BYTES(8)));       -- 1 rows affected
+
+-- als één script uitgevoerd ("8 rows affected"):
+DROP TABLE "varbytes";
+CREATE TABLE "varbytes" ("id" INTEGER, "v" VARBYTES(8), "b" BYTES(8));
+INSERT INTO "varbytes" VALUES (1, CAST('A' AS VARBYTES(8)), CAST('A' AS BYTES(8)));
+INSERT INTO "varbytes" VALUES (2, CAST('A' + #0 AS VARBYTES(8)), CAST('A' + #0 AS BYTES(8)));
+INSERT INTO "varbytes" VALUES (3, CAST('A' + #0 + #0 + #0 AS VARBYTES(8)), CAST('A' + #0 + #0 + #0 AS BYTES(8)));
+INSERT INTO "varbytes" VALUES (4, CAST(#0 AS VARBYTES(8)), CAST(#0 AS BYTES(8)));
+INSERT INTO "varbytes" VALUES (5, CAST(#0 + 'A' AS VARBYTES(8)), CAST(#0 + 'A' AS BYTES(8)));
+INSERT INTO "varbytes" VALUES (6, CAST('A' + #0 + 'B' AS VARBYTES(8)), CAST('A' + #0 + 'B' AS BYTES(8)));
+INSERT INTO "varbytes" VALUES (7, CAST('ABCDEFG' + #0 AS VARBYTES(8)), CAST('ABCDEFG' + #0 AS BYTES(8)));
+INSERT INTO "varbytes" ("id") VALUES (8);
+
+-- controles (alleen lezen)
+SELECT "id", LENGTH("v"), LENGTH("b") FROM "varbytes" ORDER BY "id"            -- FOUT
+SELECT "id", LENGTH(CAST("v" AS VARCHAR(8))) AS "lv", LENGTH(CAST("b" AS VARCHAR(8))) AS "lb", ("v" IS NULL) AS "v_null", ("b" IS NULL) AS "b_null" FROM "varbytes" ORDER BY "id"
+SELECT "id",
+ ("v" = CAST('A' AS VARBYTES(8))) AS "eq_A",
+ ("v" = CAST('A' + #0 AS VARBYTES(8))) AS "eq_A0",
+ ("v" = CAST('A' + #0 + #0 + #0 AS VARBYTES(8))) AS "eq_A000",
+ ("v" = CAST(#0 AS VARBYTES(8))) AS "eq_0",
+ ("v" = CAST(#0 + 'A' AS VARBYTES(8))) AS "eq_0A",
+ ("v" = CAST('A' + #0 + 'B' AS VARBYTES(8))) AS "eq_A0B",
+ ("v" = CAST('AB' AS VARBYTES(8))) AS "eq_AB",
+ ("v" = CAST('ABCDEFG' + #0 AS VARBYTES(8))) AS "eq_ABCDEFG0",
+ ("b" = CAST('A' AS BYTES(8))) AS "b_eq_A"
+FROM "varbytes" ORDER BY "id"
